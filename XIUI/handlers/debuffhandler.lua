@@ -26,15 +26,15 @@ local additionalEffectMes = {[160]=true, [164]=true};
 -- Maps spell IDs to duration (in seconds) and optionally buff ID overrides
 local SPELL_DURATIONS = {
     -- Weapon skills with debuffs
-    [181] = {duration = 180, buffId = 149}, -- Shell Crusher - Defense Down
-    [83] = {duration = 180, buffId = 149},  -- Armor Break - Defense Down
-    [87] = {duration = 180, buffIds = {149, 147}}, -- Full Break - Defense Down & Attack Down
+    [181] = {duration = 300, buffId = 149}, -- Shell Crusher - Defense Down
+    [83] = {duration = 300, buffId = 149},  -- Armor Break - Defense Down
+    [87] = {duration = 300, buffIds = {146, 147, 148, 149}}, -- Full Break - Defense Down & Attack Down
     [155] = {duration = 180, buffId = 149}, -- Tachi: Ageha - Defense Down
-    [187] = {duration = 180, buffId = 149}, -- Garland of Bliss - Defense Down
-    [89] = {duration = 180, buffId = 149},  -- Metatron Torment - Defense Down
-    [85] = {duration = 180, buffId = 147},  -- Weapon Break - Attack Down
-    [185] = {duration = 180, buffId = 147}, -- Gate of Tartarus - Attack Down
-    [107] = {duration = 180, buffId = 147}, -- Infernal Scythe - Attack Down
+    [187] = {duration = 120, buffId = 149}, -- Garland of Bliss - Defense Down
+    [89] = {duration = 120, buffId = 149},  -- Metatron Torment - Defense Down
+    [85] = {duration = 300, buffId = 147},  -- Weapon Break - Attack Down
+    [185] = {duration = 120, buffId = 147}, -- Gate of Tartarus - Attack Down
+    [107] = {duration = 540, buffId = 147}, -- Infernal Scythe - Attack Down
     [16] = {duration = 90, buffId = 3},     -- Wasp Sting - Poison
     [17] = {duration = 90, buffId = 3},     -- Viper Bite - Poison
     [18] = {duration = 30, buffId = 11},    -- Shadowstitch - Bind
@@ -44,7 +44,8 @@ local SPELL_DURATIONS = {
     [65] = {duration = 5, buffId = 10},     -- Smash Axe - Stun
     [162] = {duration = 5, buffId = 10},    -- Brainshaker - Stun
     [145] = {duration = 5, buffId = 10},    -- Tachi: Hobaku - Stun
-    [80] = {duration = 180, buffId = 148},  -- Shield Break - Evasion Down
+    [80] = {duration = 300, buffId = 148},  -- Shield Break - Evasion Down
+    [22] = {duration = 120, buffId = 13},  -- Energy Drain - Slow
 
     -- Dia/Bio spells
     [23] = {duration = 60},   -- Dia
@@ -111,8 +112,8 @@ local SPELL_DURATIONS = {
     [421] = {duration = 216}, -- Battlefield Elegy
 
     -- Bard songs
-    [376] = {duration = 30}, -- Foe Lullaby
-    [463] = {duration = 30}, -- Horde Lullaby
+    [376] = {duration = 36}, -- Foe Lullaby
+    [463] = {duration = 36}, -- Horde Lullaby
     [321] = {duration = 60}, -- Bully
 
     -- 2-Hour abilities
@@ -125,8 +126,7 @@ local SPELL_DURATIONS = {
     [695] = {duration = 30}, -- Blood Weapon
 
     -- Job abilities with debuffs
-    [22] = {duration = 120, buffId = 13},  -- Energy Drain - Max HP Down
-    [45] = {duration = 30, buffId = 448},  -- Mug - ???
+    [45] = {duration = 30, buffId = 448},  -- Mug - Bewildered Daze 
     [46] = {duration = 6, buffId = 10},    -- Shield Bash - Stun
     [77] = {duration = 6, buffId = 10},    -- Weapon Bash - Stun
 
@@ -172,11 +172,23 @@ local function ApplyMessage(debuffs, action)
                 local spellData = SPELL_DURATIONS[spell];
                 if spellData then
                     if spellData.buffId then
-                        debuffs[target.Id][spellData.buffId] = now + spellData.duration;
+                        if (spellData.buffId == 10 or buffId == 13) then-- Only apply stun/slow if not already present or expired
+                            if (debuffs[target.Id][spellData.buffId] == nil or debuffs[target.Id][spellData.buffId] < now) then
+                                debuffs[target.Id][spellData.buffId] = now + spellData.duration;
+                            end
+                        else
+                            debuffs[target.Id][spellData.buffId] = now + spellData.duration;
+                        end
                     end
                     if spellData.buffIds then
                         for _, buffId in ipairs(spellData.buffIds) do
-                            debuffs[target.Id][buffId] = now + spellData.duration;
+                            if (buffId == 10 or buffId == 13) then-- Only apply stun/slow if not already present or expired
+                                if (debuffs[target.Id][buffId] == nil or debuffs[target.Id][buffId] < now) then
+                                    debuffs[target.Id][buffId] = now + spellData.duration;
+                                end
+                            else
+                                debuffs[target.Id][buffId] = now + spellData.duration;
+                            end 
                         end
                     end
                 end
