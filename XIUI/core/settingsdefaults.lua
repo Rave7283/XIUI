@@ -375,6 +375,8 @@ M.user_settings = T{
     enemyListPercentFontSize = 8,
     enemyListIconScale = 1,
     showEnemyDistance = true,
+    enemyListDistanceOffsetX = 0,
+    enemyListDistanceOffsetY = 43,
     showEnemyHPPText = true,
     showEnemyListBookends = false,
     -- Enemy target container settings
@@ -1266,7 +1268,7 @@ M.default_settings = T{
             outline_width = 2,
         },
         percent_font_settings = T{
-            font_alignment = gdi.Alignment.Right,
+            font_alignment = gdi.Alignment.Left,
             font_family = 'Consolas',
             font_height = 8,
             font_color = 0xFFFFFFFF,

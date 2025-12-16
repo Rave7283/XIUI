@@ -19,6 +19,10 @@ function M.DrawSettings()
         components.DrawCheckbox('Show Distance', 'showEnemyDistance');
         if (gConfig.showEnemyDistance) then
             components.DrawSlider('Distance Font Size', 'enemyListDistanceFontSize', 8, 36);
+            components.DrawSlider('Distance Offset X', 'enemyListDistanceOffsetX', -100, 200);
+            imgui.ShowHelp('Horizontal offset for enemy distance container from the enemy entry.');
+            components.DrawSlider('Distance Offset Y', 'enemyListDistanceOffsetY', -100, 100);
+            imgui.ShowHelp('Vertical offset for enemy distance container.');
         end
         components.DrawCheckbox('Show HP% Text', 'showEnemyHPPText');
         if (gConfig.showEnemyHPPText) then
@@ -27,12 +31,6 @@ function M.DrawSettings()
         components.DrawCheckbox('Show Enemy Targets', 'showEnemyListTargets');
         imgui.ShowHelp('Shows who each enemy is targeting based on their last action.');
         if (gConfig.showEnemyListTargets) then
-            components.DrawSlider('Target Offset X', 'enemyListTargetOffsetX', -100, 200);
-            imgui.ShowHelp('Horizontal offset for enemy target container from the enemy entry.');
-            components.DrawSlider('Target Offset Y', 'enemyListTargetOffsetY', -100, 100);
-            imgui.ShowHelp('Vertical offset for enemy target container.');
-            components.DrawSlider('Target Width', 'enemyListTargetWidth', 50, 200);
-            imgui.ShowHelp('Width of the enemy target container.');
             components.DrawSlider('Target Font Size', 'enemyListTargetFontSize', 8, 36);
         end
         components.DrawCheckbox('Show Bookends', 'showEnemyListBookends');
