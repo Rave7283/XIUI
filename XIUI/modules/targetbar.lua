@@ -272,8 +272,8 @@ targetbar.DrawWindow = function(settings)
 			local entity = GetEntitySafe();
 			if entity ~= nil then
 				local targetServerId = entity:GetServerId(targetIndex);
-				local targetServerIdHex = string.format('0x%X', targetServerId);
-				targetNameText = targetNameText .. " [".. string.sub(targetServerIdHex, -3) .."]";
+				--local targetServerIdHex = string.format('0x%X', targetServerId);
+				targetNameText = targetNameText .. " [".. string.sub(targetServerId, -3) .."]";
 			end
 		end
 
@@ -436,7 +436,7 @@ targetbar.DrawWindow = function(settings)
 
 			percentText:set_visible(true);
 			-- Move left for next element (add spacing)
-			currentRightX = currentRightX - percentWidth - 8;
+			--currentRightX = currentRightX - percentWidth - 8;
 		else
 			percentText:set_visible(false);
 		end
@@ -483,7 +483,7 @@ targetbar.DrawWindow = function(settings)
 			-- Draw cast bar under HP bar using user-configurable offsets and scaling
 			local castBarY = startY + settings.barHeight + settings.castBarOffsetY;
 			-- Right-align the cast bar with the HP bar (accounting for bookends and 12px padding)
-			local castBarX = startX + settings.barWidth - bookendWidth - settings.castBarWidth - 12 + settings.castBarOffsetX;
+			local castBarX = startX + settings.barWidth - bookendWidth - settings.castBarWidth - 12 + settings.castBarOffsetX -15;
 
 			-- Cast bar settings (using adjusted settings)
 			local castBarHeight = settings.castBarHeight;
