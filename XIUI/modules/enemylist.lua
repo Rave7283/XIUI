@@ -226,7 +226,7 @@ enemylist.DrawWindow = function(settings)
 				end
 
 				-- Add spacing between entries (but not before the first in each column)
-				local entrySpacingY = 0;
+				local entrySpacingY = 10;
 				if (currentRowInColumn > 0) then
 					entrySpacingY = rowSpacing;
 				end
@@ -247,8 +247,9 @@ enemylist.DrawWindow = function(settings)
 				-- Base values at scale 1.0: padding=10, nameToBarGap=10, barToInfoGap=5
 				local scaleX = entryWidth / 125;  -- 125 is the default barWidth
 				local scaleY = settings.barHeight / 10;  -- 10 is the default barHeight
-				local padding = math.max(10 * math.min(scaleX, scaleY), 2);  -- Minimum 2px padding
-				local borderThickness = 2;
+				--local padding = math.max(10 * math.min(scaleX, scaleY), 2);  -- Minimum 2px padding
+				local padding = 4;
+				local borderThickness = 1;
 
 				-- Calculate entry dimensions
 				-- Row 1: Name text (uses name_font_settings.font_height)
@@ -256,24 +257,24 @@ enemylist.DrawWindow = function(settings)
 				-- Row 3: Distance (left) and HP% (right) - only if enabled
 				local nameHeight = settings.name_font_settings.font_height;
 				local barHeight = settings.barHeight;
+
+				if (gConfig.showEnemyHPPText and settings.percent_font_settings.font_height > barHeight) then
+					barHeight = settings.percent_font_settings.font_height;
+				end
+
 				local nameToBarGap = math.max(10 * scaleY, 1);  -- Vertical spacing between name and HP bar
 				local barToInfoGap = math.max(5 * scaleY, 1);  -- Vertical spacing between HP bar and info row
 
 				-- Calculate info row height based only on enabled features
 				local infoRowHeight = 0;
-				if (gConfig.showEnemyDistance and gConfig.showEnemyHPPText) then
-					-- Both enabled - use the max of both
-					infoRowHeight = math.max(settings.distance_font_settings.font_height, settings.percent_font_settings.font_height);
-				elseif (gConfig.showEnemyDistance) then
-					-- Only distance enabled
-					infoRowHeight = settings.distance_font_settings.font_height;
-				elseif (gConfig.showEnemyHPPText) then
+				if (gConfig.showEnemyListTargets) then
 					-- Only HP% enabled
-					infoRowHeight = settings.percent_font_settings.font_height;
+					infoRowHeight = settings.target_font_settings.font_height;
 				end
 
 				-- Calculate total height based on which rows are visible
 				local totalContentHeight = nameHeight + nameToBarGap + barHeight;
+				
 				if (infoRowHeight > 0) then
 					totalContentHeight = totalContentHeight + barToInfoGap + infoRowHeight;
 				end
@@ -315,6 +316,9 @@ enemylist.DrawWindow = function(settings)
 					-- Main target border - use configured color
 					local rgba = ARGBToRGBA(gConfig.colorCustomization.enemyList.targetBorderColor);
 					borderColor = imgui.GetColorU32(rgba);
+				else
+					local rgba = ARGBToRGBA(nameColor);
+					borderColor = imgui.GetColorU32(rgba);
 				end
 
 				if (borderColor) then
@@ -350,7 +354,7 @@ enemylist.DrawWindow = function(settings)
 					-- Set semi-transparent black color (ARGB format)
 					-- Alpha is the first byte: 0.4 * 255 = 102 = 0x66
 					bg.color = 0x66000000;  -- Semi-transparent black
-					bg.visible = true;
+					bg.visible = false;
 				end
 
 				-- ===== CONTENT RENDERING =====
@@ -394,9 +398,38 @@ enemylist.DrawWindow = function(settings)
 				end
 				nameFont:set_visible(true);
 
-				-- ROW 2: HP Bar (full width)
+				-- ROW 2: HP Bar
 				local row2Y = nameY + nameHeight + nameToBarGap;
 				local barX = entryStartX + padding;
+
+				-- HP% text
+				if (gConfig.showEnemyHPPText) then
+					-- Use numeric key directly for O(1) lookup (no string concatenation)
+					if (enemyHPFonts[k] == nil) then
+						-- Use FontManager for cleaner font creation
+						enemyHPFonts[k] = FontManager.create(settings.percent_font_settings);
+					end
+					local hpFont = enemyHPFonts[k];
+					-- Dynamically set font height based on settings (avoids expensive font recreation)
+					hpFont:set_font_height(settings.percent_font_settings.font_height);
+					-- Only call set_font_color if the color has changed (expensive operation for GDI fonts)
+					local hpColor = gConfig.colorCustomization.enemyList.percentTextColor;
+					if (enemyHPColorCache[k] ~= hpColor) then
+						hpFont:set_font_color(hpColor);
+						enemyHPColorCache[k] = hpColor;
+					end
+					hpFont:set_text(hpText);
+
+					-- Right-align: set position to right edge, font alignment handles the rest
+					hpFont:set_position_x(entryStartX + padding);
+					hpFont:set_position_y(row2Y-2);
+					hpFont:set_visible(true);
+
+					--Shrink HP bar if % is shown
+					barWidth = barWidth - 3.5 * settings.percent_font_settings.font_height;
+					barX = barX + 3.5 * settings.percent_font_settings.font_height;
+				end
+
 				imgui.SetCursorScreenPos({barX, row2Y});
 
 				local enemyGradient = GetCustomGradient(gConfig.colorCustomization.enemyList, 'hpGradient') or {'#e16c6c', '#fb9494'};
@@ -406,54 +439,69 @@ enemylist.DrawWindow = function(settings)
 					{decorate = gConfig.showEnemyListBookends}
 				);
 
-				-- ROW 3: Distance (left aligned) and HP% (right aligned)
-				if (gConfig.showEnemyDistance or gConfig.showEnemyHPPText) then
+				-- ROW 3: Target of target
+				if (gConfig.showEnemyListTargets) then
 					local row3Y = row2Y + barHeight + barToInfoGap;
+					local hasValidTarget = false;
+					local targetName = nil;
 
-					-- Distance text (left-aligned)
-					if (gConfig.showEnemyDistance) then
-						-- Use numeric key directly for O(1) lookup (no string concatenation)
-						if (enemyDistanceFonts[k] == nil) then
-							-- Use FontManager for cleaner font creation
-							enemyDistanceFonts[k] = FontManager.create(settings.distance_font_settings);
+					if isPreviewMode then
+						-- Use preview target data
+						targetName = previewTargets[k];
+						hasValidTarget = targetName ~= nil;
+					else
+						-- Normal mode: get real target from action tracker
+						local targetIdx = actionTracker.GetLastTarget(ent.ServerId);
+						if (targetIdx ~= nil) then
+							local targetEntity = GetEntity(targetIdx);
+							if (targetEntity ~= nil and targetEntity.Name ~= nil) then
+								targetName = targetEntity.Name;
+								hasValidTarget = true;
+							end
 						end
-						local distanceFont = enemyDistanceFonts[k];
-						-- Dynamically set font height based on settings (avoids expensive font recreation)
-						distanceFont:set_font_height(settings.distance_font_settings.font_height);
-						-- Only call set_font_color if the color has changed (expensive operation for GDI fonts)
-						local distanceColor = gConfig.colorCustomization.enemyList.distanceTextColor;
-						if (enemyDistanceColorCache[k] ~= distanceColor) then
-							distanceFont:set_font_color(distanceColor);
-							enemyDistanceColorCache[k] = distanceColor;
-						end
-						distanceFont:set_position_x(entryStartX + padding);
-						distanceFont:set_position_y(row3Y);
-						distanceFont:set_text(distanceText);
-						distanceFont:set_visible(true);
 					end
 
-					-- HP% text (right-aligned)
-					if (gConfig.showEnemyHPPText) then
+					if (hasValidTarget and targetName) then
+						-- Target name
 						-- Use numeric key directly for O(1) lookup (no string concatenation)
-						if (enemyHPFonts[k] == nil) then
-							-- Use FontManager for cleaner font creation
-							enemyHPFonts[k] = FontManager.create(settings.percent_font_settings);
+						if (enemyTargetFonts[k] == nil) then
+							enemyTargetFonts[k] = FontManager.create(settings.target_font_settings);
 						end
-						local hpFont = enemyHPFonts[k];
-						-- Dynamically set font height based on settings (avoids expensive font recreation)
-						hpFont:set_font_height(settings.percent_font_settings.font_height);
-						-- Only call set_font_color if the color has changed (expensive operation for GDI fonts)
-						local hpColor = gConfig.colorCustomization.enemyList.percentTextColor;
-						if (enemyHPColorCache[k] ~= hpColor) then
-							hpFont:set_font_color(hpColor);
-							enemyHPColorCache[k] = hpColor;
-						end
-						hpFont:set_text(hpText);
+						local targetFont = enemyTargetFonts[k];
+						-- Dynamically set font height and color based on settings
+						targetFont:set_font_height(settings.target_font_settings.font_height);
+						local targetTextColor = gConfig.colorCustomization.enemyList.targetNameTextColor or 0xFFFFAA00;
+						targetFont:set_font_color(targetTextColor);
+						targetFont:set_position_x(entryStartX + padding);
+						targetFont:set_position_y(row3Y);
 
-						-- Right-align: set position to right edge, font alignment handles the rest
-						hpFont:set_position_x(entryStartX + entryWidth - padding);
-						hpFont:set_position_y(row3Y);
-						hpFont:set_visible(true);
+						-- Truncate name to fit (use cache to avoid per-frame binary search)
+						local targetWidth = gConfig.enemyListTargetWidth or 100;
+						local targetPadding = 6;
+						local targetNameHeight = settings.target_font_settings.font_height;
+						local targetTotalHeight = (targetPadding * 2) + targetNameHeight;
+						local maxTargetNameWidth = targetWidth - (targetPadding * 2);
+						local targetFontHeight = settings.target_font_settings.font_height;
+						local targetNameCache = truncatedTargetNameCache[k];
+						local displayTargetName;
+						if targetNameCache and targetNameCache.name == targetName and targetNameCache.maxWidth == maxTargetNameWidth and targetNameCache.fontHeight == targetFontHeight then
+							-- Cache hit - reuse truncated name
+							displayTargetName = targetNameCache.truncated;
+						else
+							-- Cache miss - compute and store (font height affects text width measurement)
+							displayTargetName = TruncateTextToFit(targetFont, targetName, maxTargetNameWidth);
+							truncatedTargetNameCache[k] = {name = targetName, maxWidth = maxTargetNameWidth, fontHeight = targetFontHeight, truncated = displayTargetName};
+						end
+						targetFont:set_text(displayTargetName);
+						targetFont:set_visible(true);
+					else
+						-- Hide target elements if enemy has no valid target (prevents stale overlays)
+						if (enemyTargetBackgrounds[k] ~= nil) then
+							enemyTargetBackgrounds[k].visible = false;
+						end
+						if (enemyTargetFonts[k] ~= nil) then
+							enemyTargetFonts[k]:set_visible(false);
+						end
 					end
 				end
 
@@ -493,97 +541,31 @@ enemylist.DrawWindow = function(settings)
 					end
 				end
 
-				-- ===== ENEMY TARGET CONTAINER =====
-				-- Show target's name in a separate container to the right
-				if (gConfig.showEnemyListTargets) then
-					local hasValidTarget = false;
-					local targetName = nil;
+				-- Show target's distance in a separate container to the right
+				if (gConfig.showEnemyDistance) then
+					local distanceOffsetX = gConfig.enemyListDistanceOffsetX or 10;
+					local distanceOffsetY = gConfig.enemyListDistanceOffsetY or 0;
 
-					if isPreviewMode then
-						-- Use preview target data
-						targetName = previewTargets[k];
-						hasValidTarget = targetName ~= nil;
-					else
-						-- Normal mode: get real target from action tracker
-						local targetIdx = actionTracker.GetLastTarget(ent.ServerId);
-						if (targetIdx ~= nil) then
-							local targetEntity = GetEntity(targetIdx);
-							if (targetEntity ~= nil and targetEntity.Name ~= nil) then
-								targetName = targetEntity.Name;
-								hasValidTarget = true;
-							end
-						end
-					end
-
-					if (hasValidTarget and targetName) then
-						-- Position target container using configurable offsets
-						local targetOffsetX = gConfig.enemyListTargetOffsetX or 10;
-						local targetOffsetY = gConfig.enemyListTargetOffsetY or 0;
-						local targetContainerX = entryStartX + entryWidth + targetOffsetX;
-						local targetContainerY = entryStartY + targetOffsetY;
-
-						-- Target container dimensions (configurable width)
-						local targetWidth = gConfig.enemyListTargetWidth or 100;
-						local targetPadding = 6;
-						local targetNameHeight = settings.target_font_settings.font_height;
-						local targetTotalHeight = (targetPadding * 2) + targetNameHeight;
-
-						-- ===== PRIMITIVE BACKGROUND RENDERING =====
-						-- Create/get background primitive for this target container
-						-- Primitives render in the correct layer (behind Ashita fonts)
+					-- Distance text
+					if (gConfig.showEnemyDistance) then
 						-- Use numeric key directly for O(1) lookup (no string concatenation)
-						if (enemyTargetBackgrounds[k] == nil and settings.prim_data) then
-							enemyTargetBackgrounds[k] = primitives.new(settings.prim_data);
-							enemyTargetBackgrounds[k].can_focus = false;
-							enemyTargetBackgrounds[k].locked = true;
+						if (enemyDistanceFonts[k] == nil) then
+							-- Use FontManager for cleaner font creation
+							enemyDistanceFonts[k] = FontManager.create(settings.distance_font_settings);
 						end
-
-						if (enemyTargetBackgrounds[k] ~= nil) then
-							local targetBg = enemyTargetBackgrounds[k];
-							targetBg.position_x = targetContainerX;
-							targetBg.position_y = targetContainerY;
-							targetBg.width = targetWidth;
-							targetBg.height = targetTotalHeight;
-							-- Semi-transparent black (0.4 alpha * 255 = 102 = 0x66)
-							targetBg.color = 0x66000000;
-							targetBg.visible = true;
+						local distanceFont = enemyDistanceFonts[k];
+						-- Dynamically set font height based on settings (avoids expensive font recreation)
+						distanceFont:set_font_height(settings.distance_font_settings.font_height);
+						-- Only call set_font_color if the color has changed (expensive operation for GDI fonts)
+						local distanceColor = gConfig.colorCustomization.enemyList.distanceTextColor;
+						if (enemyDistanceColorCache[k] ~= distanceColor) then
+							distanceFont:set_font_color(distanceColor);
+							enemyDistanceColorCache[k] = distanceColor;
 						end
-
-						-- Target name
-						-- Use numeric key directly for O(1) lookup (no string concatenation)
-						if (enemyTargetFonts[k] == nil) then
-							enemyTargetFonts[k] = FontManager.create(settings.target_font_settings);
-						end
-						local targetFont = enemyTargetFonts[k];
-						-- Dynamically set font height and color based on settings
-						targetFont:set_font_height(settings.target_font_settings.font_height);
-						local targetTextColor = gConfig.colorCustomization.enemyList.targetNameTextColor or 0xFFFFAA00;
-						targetFont:set_font_color(targetTextColor);
-						targetFont:set_position_x(targetContainerX + targetPadding);
-						targetFont:set_position_y(targetContainerY + targetPadding);
-						-- Truncate name to fit (use cache to avoid per-frame binary search)
-						local maxTargetNameWidth = targetWidth - (targetPadding * 2);
-						local targetFontHeight = settings.target_font_settings.font_height;
-						local targetNameCache = truncatedTargetNameCache[k];
-						local displayTargetName;
-						if targetNameCache and targetNameCache.name == targetName and targetNameCache.maxWidth == maxTargetNameWidth and targetNameCache.fontHeight == targetFontHeight then
-							-- Cache hit - reuse truncated name
-							displayTargetName = targetNameCache.truncated;
-						else
-							-- Cache miss - compute and store (font height affects text width measurement)
-							displayTargetName = TruncateTextToFit(targetFont, targetName, maxTargetNameWidth);
-							truncatedTargetNameCache[k] = {name = targetName, maxWidth = maxTargetNameWidth, fontHeight = targetFontHeight, truncated = displayTargetName};
-						end
-						targetFont:set_text(displayTargetName);
-						targetFont:set_visible(true);
-					else
-						-- Hide target elements if enemy has no valid target (prevents stale overlays)
-						if (enemyTargetBackgrounds[k] ~= nil) then
-							enemyTargetBackgrounds[k].visible = false;
-						end
-						if (enemyTargetFonts[k] ~= nil) then
-							enemyTargetFonts[k]:set_visible(false);
-						end
+						distanceFont:set_position_x(entryStartX + distanceOffsetX);
+						distanceFont:set_position_y(entryStartY + distanceOffsetY);
+						distanceFont:set_text(distanceText);
+						distanceFont:set_visible(true);
 					end
 				end
 
